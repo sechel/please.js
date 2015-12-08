@@ -182,13 +182,14 @@ var please_messageHandler = function (messageEvent) {
 	}
 
 	if (data.type === 'request') {
-		var response = new Response(data);
+    // messageEvent.origin is 'null' in case of file:// url.
+		// For such environment we use the default targetOrigin
+		var origin = messageEvent.origin === 'null' ? defaults.targetOrigin : messageEvent.origin;
+
+		var response = new Response(data, origin);
 		responses[response.id] = response.data;
 		response.targetWindow = messageEvent.source;
-
-		// messageEvent.origin is 'null' in case of file:// url.
-		// For such environment we use the default targetOrigin
-		response.targetOrigin = messageEvent.origin === 'null' ? defaults.targetOrigin : messageEvent.origin;
+    response.targetOrigin = origin;
 
 		response.send();
 	}
@@ -221,6 +222,8 @@ var please_messageHandler = function (messageEvent) {
  * of the function, or fails resolution if an error occurs in the other window.
  */
 please.call = please_request('call');
+
+please.callSecure = please_request('callSecure');
 
 /**
  * Sets a global variable or a property on an object in the other window.
@@ -359,6 +362,10 @@ _please.call = function (funcName) {
 			message: "'" + funcName + "'" + ' is not a function'
 		});
 	}
+};
+
+_please.callSecure = function (funcName) {
+	return _please.call.apply(this, arguments);
 };
 
 function pathErrorHelper(arr, currentPos) {
@@ -515,8 +522,8 @@ function Request(name) {
  * @class Response
  * @constructor
  */
-function Response(req) {
-	this.init(req);
+function Response(req, origin) {
+	this.init(req, origin);
 }
 
 var lastRequestId = 0;
@@ -572,6 +579,12 @@ Request.prototype = {
 		return _please[this.name].apply(this, this.data);
 	},
 
+  performSecure: function (origin) {
+    var secureData = this.data.slice(0);
+    secureData.splice(1, 0, origin);
+    return _please[this.name].apply(this, secureData);
+  },
+
 	/**
 	 * Returns a stringifyable JSON for JSON.stringify.
 	 */
@@ -605,12 +618,16 @@ Response.prototype = {
 	 *
 	 * @param  {Request} req The Request object this Response is associated with.
 	 */
-	init: function (req) {
+	init: function (req, origin) {
 		this.id = req.id;
 		this.name = req.name;
 		this.type = 'response';
 		try {
-			this.data = Request.create(req).perform();
+      if (req.name == 'callSecure') {
+        this.data = Request.create(req).performSecure(origin);
+      } else {
+        this.data = Request.create(req).perform();
+      }
 			this.success = true;
 		} catch (error) {
 			this.data = new please.Error(error);
