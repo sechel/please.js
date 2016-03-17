@@ -6,7 +6,7 @@
   } else {
     root.please = factory(root.$, root);
   }
-} (this, window.__pleaseClosure = function ($, window) {
+} (this, window.__pleaseClosure = function ($, undefined) {
 	'use strict';
 	var console = window.console; // jshint unused: false
 
